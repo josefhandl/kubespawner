@@ -128,10 +128,6 @@ class KubeSpawner(Spawner):
     safe_chars = set(string.ascii_lowercase + string.digits)
 
     def _get_reflector_key(self, kind: str) -> Tuple[str, str, Optional[str]]:
-        if self.enable_user_namespaces:
-            # one reflector fo all namespaces
-            return (kind, None)
-
         return (kind, self.namespace)
 
     @property
@@ -2457,7 +2453,6 @@ class KubeSpawner(Spawner):
             kind="events",
             reflector_class=EventReflector,
             fields={"involvedObject.kind": "Pod"},
-            omit_namespace=self.enable_user_namespaces,
             replace=replace,
         )
 
@@ -2474,7 +2469,6 @@ class KubeSpawner(Spawner):
             kind="pods",
             reflector_class=PodReflector,
             labels={"component": self.component_label},
-            omit_namespace=self.enable_user_namespaces,
             replace=replace,
         )
 
