@@ -296,12 +296,13 @@ class KubeSpawner(Spawner):
         help="""
         Cause each user to be spawned into an individual namespace.
 
-        This comes with some caveats.  The Hub must run with significantly
-        more privilege (must have ClusterRoles analogous to its usual Roles)
-        and can therefore do heinous things to the entire cluster.
+        This comes with some caveats.  The Hub may require significantly
+        more privilege ("get" the user namespaces, and access to all
+        namespaced resources within them) and can therefore do heinous things
+        to the specified user namespaces.
 
-        It will also make the Reflectors aware of pods and events across
-        all namespaces.  This will have performance implications, although
+        It will also make the Reflectors aware of pods and events per each
+        user namespace.  This will have performance implications, although
         using labels to restrict resource selection helps somewhat.
 
         If you use this, consider cleaning up the user namespace in your
@@ -2388,39 +2389,18 @@ class KubeSpawner(Spawner):
                 await previous_reflector.first_load_future
             return previous_reflector
 
-        if self.enable_user_namespaces:
-            # Create one reflector for all namespaces.
-            # This requires binding ServiceAccount to ClusterRole.
-
-            def on_reflector_failure():
-                # If reflector cannot be started, halt the JH application.
-                self.log.critical(
-                    "Reflector with key %r failed, halting Hub.",
-                    key,
-                )
-                sys.exit(1)
-
-            async def catch_reflector_start(func):
-                try:
-                    await func
-                except Exception:
-                    self.log.exception(f"Reflector with key {key} failed to start.")
-                    sys.exit(1)
-
-        else:
-            # Create a dedicated reflector for each namespace.
-            # This allows JH to run pods in multiple namespaces without binding ServiceAccount to ClusterRole.
-
-            on_reflector_failure = None
-
-            async def catch_reflector_start(func):
-                # If reflector cannot be started (e.g. insufficient access rights, namespace cannot be found),
-                # just raise an exception instead halting the entire JH application.
-                try:
-                    await func
-                except Exception:
-                    self.log.exception(f"Reflector with key {key} failed to start.")
-                    raise
+        # Create a dedicated reflector for each namespace.
+        # This allows JH to run pods in multiple namespaces potecialy without
+        # needs to bind ServiceAccount to ClusterRole.
+        on_reflector_failure = None
+        async def catch_reflector_start(func):
+            # If reflector cannot be started (e.g. insufficient access rights,
+            # namespace cannot be found), raise an exception
+            try:
+                await func
+            except Exception:
+                self.log.exception(f"Reflector with key {key} failed to start.")
+                raise
 
         self.__class__.reflectors[key] = current_reflector = reflector_class(
             parent=self,

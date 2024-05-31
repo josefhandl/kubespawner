@@ -66,15 +66,6 @@ class ResourceReflector(LoggingConfigurable):
         """,
     )
 
-    omit_namespace = Bool(
-        False,
-        config=True,
-        help="""
-        Set this to true if the reflector is to operate across
-        multiple namespaces.
-        """,
-    )
-
     namespace = Unicode(
         None,
         allow_none=True,
@@ -92,14 +83,10 @@ class ResourceReflector(LoggingConfigurable):
 
         This will be passed a a label selector.
 
-        If self.omit_namespace is False you want something of the form
-        list_namespaced_<resource> - for example,
-        `list_namespaced_pod` will give you a PodReflector.  It will
+        You want something of the form list_namespaced_<resource> - for
+        example, `list_namespaced_pod` will give you a PodReflector.  It will
         take its namespace from self.namespace (which therefore should
         not be None).
-
-        If self.omit_namespace is True, you want
-        list_<resource>_for_all_namespaces.
 
         This must be set by a subclass.
 
@@ -175,8 +162,7 @@ class ResourceReflector(LoggingConfigurable):
 
         self.first_load_future = asyncio.Future()
 
-        # Make sure that we know kind, whether we should omit the
-        #  namespace, and what our list_method_name is.  For the things
+        # Make sure that we know what our list_method_name is.  For the things
         #  we already know about, we can derive list_method_name from
         #  those two things.  New reflector types should also update
         #  their __init__() methods to derive list_method_name, but you
@@ -191,14 +177,9 @@ class ResourceReflector(LoggingConfigurable):
             }
 
             if self.kind in plural_to_singular:
-                if self.omit_namespace:
-                    self.list_method_name = (
-                        f"list_{plural_to_singular[self.kind]}_for_all_namespaces"
-                    )
-                else:
-                    self.list_method_name = (
-                        f"list_namespaced_{plural_to_singular[self.kind]}"
-                    )
+                self.list_method_name = (
+                    f"list_namespaced_{plural_to_singular[self.kind]}"
+                )
 
         # Make sure we have the required values.
         if not self.kind:
@@ -224,8 +205,8 @@ class ResourceReflector(LoggingConfigurable):
         if resource_version is not None:
             kwargs["resource_version"] = resource_version
             kwargs["resource_version_match"] = "NotOlderThan"
-        if not self.omit_namespace:
-            kwargs["namespace"] = self.namespace
+
+        kwargs["namespace"] = self.namespace
 
         list_method = getattr(self.api, self.list_method_name)
         initial_resources_raw = await list_method(**kwargs)
@@ -274,10 +255,7 @@ class ResourceReflector(LoggingConfigurable):
 
         cur_delay = 0.1
 
-        if self.omit_namespace:
-            ns_str = "all namespaces"
-        else:
-            ns_str = f"namespace {self.namespace}"
+        ns_str = f"namespace {self.namespace}"
 
         self.log.info(
             "watching for %s with %s in %s",
@@ -296,8 +274,8 @@ class ResourceReflector(LoggingConfigurable):
                     "field_selector": self.field_selector,
                     "resource_version": resource_version,
                 }
-                if not self.omit_namespace:
-                    watch_args["namespace"] = self.namespace
+                watch_args["namespace"] = self.namespace
+
                 if self.request_timeout:
                     # set network receive timeout
                     watch_args['_request_timeout'] = self.request_timeout
@@ -426,17 +404,3 @@ class NamespacedResourceReflector(ResourceReflector):
     Watches for resources in a particular namespace.  The list_methods
     want both a method name and a namespace.
     """
-
-    omit_namespace = False
-
-
-class MultiNamespaceResourceReflector(ResourceReflector):
-    """
-    Watches for resources across all namespaces.  The list_methods
-    want only a method name.  Note that this requires the service account
-    to be significantly more powerful, since it must be bound to ClusterRoles
-    rather than just Roles, and therefore this is inherently more
-    dangerous.
-    """
-
-    omit_namespace = True

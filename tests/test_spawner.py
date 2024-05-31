@@ -1278,7 +1278,7 @@ async def test_spawn_start_profile_callback_override_namespace(
     config.KubeSpawner.profile_list = get_profile
 
     # It does not matter if namespace is set explicitly or generated from a template,
-    # checking enable_user_namespaces=True only to cover case with one reflector per all namespaces
+    # checking enable_user_namespaces=True only to cover case with one reflector per user namespace
     config.KubeSpawner.enable_user_namespaces = True
     config.KubeSpawner.user_namespace_template = kube_ns
 
